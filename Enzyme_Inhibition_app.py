@@ -108,7 +108,7 @@ if file_un is not None and file_in is not None:
         ))
         fig.add_trace(go.Scatter(
             x=x_fit, y=(reg_in.slope * x_fit + reg_in.intercept), mode='lines',
-            name=f'Inhibited Fit (Vmax={Vax_in:.1f}, Km={Km_in:.1f})',
+            name=f'Inhibited Fit (Vmax={Vmax_in:.1f}, Km={Km_in:.1f})',
             line=dict(color='red')
         ))
 
