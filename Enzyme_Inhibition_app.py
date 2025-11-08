@@ -1,3 +1,6 @@
+# Save this file as "inhibition_app.py"
+# In your terminal, run: streamlit run inhibition_app.py
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -28,37 +31,71 @@ v_units = st.sidebar.selectbox(
     index=0
 )
 
-# --- 3. File Uploaders ---
-st.write("Upload both your uninhibited (control) and inhibited data files.")
-col1, col2 = st.columns(2)
-with col1:
-    file_un = st.file_uploader("Upload Uninhibited .csv", type="csv")
-with col2:
-    file_in = st.file_uploader("Upload Inhibited .csv", type="csv")
+# --- 3. Data Entry ---
+st.write("Paste your 3-column data from Excel/Sheets (must include headers):")
+
+# Default data uses plain text headers, as this is what the user will paste
+default_data = "Substrate_Concentration\tV0_Uninhibited\tV0_Inhibited\n" \
+               "1\t17.1\t7.1\n" \
+               "2\t29.5\t13.6\n" \
+               "4\t51.2\t25.0\n" \
+               "8\t73.9\t42.8\n" \
+               "16\t102.1\t66.6\n" \
+               "32\t118.5\t92.3\n" \
+               "50\t130.2\t107.1"
+
+data_string = st.text_area(
+    "Paste Data Here",
+    default_data,
+    height=250,
+    help="Copy and paste your 3-column table directly from Excel or Sheets."
+)
+
 
 # --- 4. Function to Process Data ---
-def process_kinetics_data(uploaded_file):
+def process_kinetics_data(df, velocity_column):
     try:
-        data = pd.read_csv(uploaded_file)
-        S, v = data['Substrate_Concentration'], data['Initial_Velocity']
+        S = df['Substrate_Concentration']
+        v = df[velocity_column]
+        
         non_zero_mask = S != 0
         S = S[non_zero_mask]
         v = v[non_zero_mask]
+        
         inv_S, inv_v = 1 / S, 1 / v
         regression = linregress(inv_S, inv_v)
         Vmax = 1 / regression.intercept
         Km = regression.slope * Vmax
         return inv_S, inv_v, Vmax, Km, regression
     except Exception as e:
-        st.error(f"Error processing {uploaded_file.name}: {e}")
-        st.warning("Please ensure files have 'Substrate_Concentration' and 'Initial_Velocity' columns.")
+        st.error(f"Error processing {velocity_column}: {e}")
         return None
 
+
 # --- 5. Main Analysis ---
-if file_un is not None and file_in is not None:
+if data_string:
     
-    processed_un = process_kinetics_data(file_un)
-    processed_in = process_kinetics_data(file_in)
+    try:
+        data_file_object = io.StringIO(data_string)
+        data = pd.read_csv(data_file_object, sep=None, engine='python')
+        
+        # Plain text headers for code
+        required_cols = ['Substrate_Concentration', 'V0_Uninhibited', 'V0_Inhibited']
+        # LaTeX headers for display
+        required_cols_display = ['Substrate_Concentration', '$V_0$_Uninhibited', '$V_0$_Inhibited'] # <-- MODIFIED
+        
+        if not all(col in data.columns for col in required_cols):
+            st.error(f"Error: Your data must have these 3 columns: {required_cols_display}") # <-- MODIFIED
+            st.stop()
+            
+    except Exception as e:
+        st.error(f"Error reading data: {e}")
+        st.warning("Please make sure you paste the 3-column table, *including* the headers.")
+        st.stop()
+
+    # Process both datasets from the single DataFrame
+    processed_un = process_kinetics_data(data, "V0_Uninhibited")
+    processed_in = process_kinetics_data(data, "V0_Inhibited")
     
     if processed_un and processed_in:
         inv_S_un, inv_v_un, Vmax_un, Km_un, reg_un = processed_un
@@ -81,17 +118,11 @@ if file_un is not None and file_in is not None:
         
         fig = go.Figure()
 
-        # --- (MODIFIED) ---
-        # Calculate x-intercepts to define the plot range
         x_int_un = -1 / Km_un
         x_int_in = -1 / Km_in
-        
-        # Determine the plot's x-axis range
         max_x = max(max(inv_S_un), max(inv_S_in)) * 1.1
-        min_x = min(0, x_int_un, x_int_in) * 1.1 # Start from the most negative intercept
-        
+        min_x = min(0, x_int_un, x_int_in) * 1.1 
         x_fit = np.linspace(min_x, max_x, 100)
-        # --- (END MODIFIED) ---
         
         # Uninhibited Traces
         fig.add_trace(go.Scatter(
@@ -109,15 +140,11 @@ if file_un is not None and file_in is not None:
             x=inv_S_in, y=inv_v_in, mode='markers', name='Inhibited (Data)',
             marker=dict(color='red', size=8)
         ))
-        
-        # --- (MODIFIED) ---
-        # Fixed the Vax -> Vmax typo
         fig.add_trace(go.Scatter(
             x=x_fit, y=(reg_in.slope * x_fit + reg_in.intercept), mode='lines',
             name=f'Inhibited Fit (Vmax={Vmax_in:.1f}, Km={Km_in:.1f})',
             line=dict(color='red')
         ))
-        # --- (END MODIFIED) ---
 
         # Layout
         fig.update_layout(
@@ -131,11 +158,12 @@ if file_un is not None and file_in is not None:
         
         st.plotly_chart(fig, use_container_width=True)
 
-# --- 8. Instructions ---
+# --- (MODIFIED) 8. Instructions ---
 st.header("How to Use")
 st.markdown("""
-1.  **Prepare your data**: Create two `.csv` files (one for uninhibited, one for inhibited).
-2.  **Check headers**: Ensure both files have `Substrate_Concentration` and `Initial_Velocity` columns.
-3.  **Upload**: Drag and drop both files into their respective upload boxes.
-4.  **Analyze**: The app will automatically update with your comparative results and plots.
+1.  **Prepare your data**: In Excel/Sheets, make sure you have 3 columns: `Substrate_Concentration`, `$V_0$_Uninhibited`, `$V_0$_Inhibited`.
+2.  **Copy**: Select all 3 columns (including the headers).
+3.  **Paste**: Paste the entire table into the text box above, replacing the sample data.
+4.  **Analyze**: The app will automatically update.
+5.  **Settings**: Use the sidebar to change the units.
 """)
