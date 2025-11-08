@@ -15,24 +15,18 @@ st.subheader("Comparative Lineweaver-Burk Plot")
 
 # --- 2. Define Units (as a sidebar input) ---
 st.sidebar.header("Settings")
-
-# --- (MODIFIED) ---
-# Create lists of common units
 s_unit_options = ['mM', 'μM', 'M', 'nM']
 v_unit_options = ['μM/min', 'μM/s', 'mM/min', 'mM/s', 'M/min', 'M/s', 'nM/min', 'nM/s']
-
-# Create dropdown menus
 S_units = st.sidebar.selectbox(
     "Substrate Units", 
     options=s_unit_options, 
-    index=0  # 'mM' is the default
+    index=0
 ) 
 v_units = st.sidebar.selectbox(
     "Velocity Units", 
     options=v_unit_options, 
-    index=0  # 'μM/min' is the default
+    index=0
 )
-# --- (END MODIFIED) ---
 
 # --- 3. File Uploaders ---
 st.write("Upload both your uninhibited (control) and inhibited data files.")
@@ -87,8 +81,17 @@ if file_un is not None and file_in is not None:
         
         fig = go.Figure()
 
+        # --- (MODIFIED) ---
+        # Calculate x-intercepts to define the plot range
+        x_int_un = -1 / Km_un
+        x_int_in = -1 / Km_in
+        
+        # Determine the plot's x-axis range
         max_x = max(max(inv_S_un), max(inv_S_in)) * 1.1
-        x_fit = np.linspace(0, max_x, 100)
+        min_x = min(0, x_int_un, x_int_in) * 1.1 # Start from the most negative intercept
+        
+        x_fit = np.linspace(min_x, max_x, 100)
+        # --- (END MODIFIED) ---
         
         # Uninhibited Traces
         fig.add_trace(go.Scatter(
@@ -106,11 +109,15 @@ if file_un is not None and file_in is not None:
             x=inv_S_in, y=inv_v_in, mode='markers', name='Inhibited (Data)',
             marker=dict(color='red', size=8)
         ))
+        
+        # --- (MODIFIED) ---
+        # Fixed the Vax -> Vmax typo
         fig.add_trace(go.Scatter(
             x=x_fit, y=(reg_in.slope * x_fit + reg_in.intercept), mode='lines',
             name=f'Inhibited Fit (Vmax={Vmax_in:.1f}, Km={Km_in:.1f})',
             line=dict(color='red')
         ))
+        # --- (END MODIFIED) ---
 
         # Layout
         fig.update_layout(
